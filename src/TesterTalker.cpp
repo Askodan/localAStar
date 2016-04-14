@@ -14,18 +14,19 @@ geometry_msgs::Pose goalPosition;
 geometry_msgs::Pose currentPosition;
 const double tf::Transformer::DEFAULT_CACHE_TIME = 10.0;
 laser_geometry::LaserProjection projector;
-ros::Publisher pointPub;
+//ros::Publisher pointPub;
 ros::Publisher markerViz;
 float robotWidth = 0.5;//ważny parametr grubości naszego ulubieńca najlepiej podawać wraz z zapasem odległości od przeszkód
 bool Ruszaj_Batmobilu = false;
+tf::TransformListener* listener;
 
 ///function dectarations
 void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg);
 void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg);
-void UpdateCurrentPosition(geometry_msgs::Pose &newPose, tf::TransformListener* listener);
+void UpdateCurrentPosition(geometry_msgs::Pose &newPose);
 bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles);
 void makeMarker(geometry_msgs::PoseStamped pos, float r, float g, float b);
-void makeMarker(float x, float y, float r, float g, float b);
+void makeMarker(int id, float x, float y, float r, float g, float b);
 
 
 ///main
@@ -36,20 +37,20 @@ int main(int argc, char **argv)
     ros::NodeHandle n;
     ros::Subscriber subScan = n.subscribe("/batman/scan", 100, ScanCallback);
     ros::Subscriber goalSub = n.subscribe("/move_base_simple/goal", 20, GoalCallback);
-    pointPub = n.advertise<geometry_msgs::PoseStamped>("/path/chwilowy", 1000);
+    //pointPub = n.advertise<geometry_msgs::PoseStamped>("/path/chwilowy", 1000);
     markerViz = n.advertise<visualization_msgs::Marker>("/markers", 1000);
-    tf::TransformListener transformListener;
+    listener = new tf::TransformListener();
     ros::Rate loop_rate(10);
 
     while (ros::ok())
     {
-        //UpdateCurrentPosition(currentPosition, &transformListener);
+        //UpdateCurrentPosition(currentPosition);
 
         ros::spinOnce();
 
         loop_rate.sleep();
     }
-
+    delete listener;
     return 0;
 }
 
@@ -70,22 +71,40 @@ void TfCallback(const tf2_msgs::TFMessage::ConstPtr& msg)
 
 void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg)
 {
-    ///copy the given goal to global variable
-    memcpy(&goalPosition, &(goalMsg->pose), sizeof(goalPosition));
+    //przeliczam goal na współrzędne robota
+    tf::Stamped<tf::Pose> goal, transformed_goal;
+    geometry_msgs::PoseStamped transformed_goalMsg;
+    tf::poseStampedMsgToTF(*goalMsg, goal);
+    try
+    {
+        listener->waitForTransform("batman/base_laser_link", goal.frame_id_, ros::Time::now(), ros::Duration(3.0));
+        listener->transformPose("batman/base_laser_link", goal, transformed_goal);
 
-    float x = goalMsg->pose.position.x;
-    float y = goalMsg->pose.position.y;
-    float z = goalMsg->pose.position.z;
+        tf::poseStampedTFToMsg(transformed_goal, transformed_goalMsg);
+    }
+    catch (tf::TransformException ex)
+    {
+        ROS_ERROR("%s",ex.what());
+        ros::Duration(1.0).sleep();
+    }
+
+    ///copy the given goal to global variable
+    memcpy(&goalPosition, &(transformed_goalMsg.pose), sizeof(goalPosition));
+
+    float x = transformed_goalMsg.pose.position.x;
+    float y = transformed_goalMsg.pose.position.y;
+    float z = transformed_goalMsg.pose.position.z;
     printf("goal: x, y, z: %f, %f, %f\n", x, y, z);
+
 }
 
-void UpdateCurrentPosition(geometry_msgs::Pose &newPose, tf::TransformListener* listener)
+void UpdateCurrentPosition(geometry_msgs::Pose &newPose)
 {
     tf::StampedTransform transform;
 
     try
     {
-        listener->lookupTransform("/tf", "batman/base_laser_link", ros::Time(0), transform);
+        listener->lookupTransform("map", "batman/base_laser_link", ros::Time(0), transform);
     }
     catch (tf::TransformException ex)
     {
@@ -114,13 +133,18 @@ bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles){
     //int l = 0;
     //ogólnie oś x - do przodu, oś y - w bok(jeśli wierzyć rvizowi, to w lewo), oś z do góry
     for(int i =0;i<obstacles->points.capacity();i++){
+        //kończy pętle, gdy dojdzie do pustych punktów
+        if(obstacles->points[i].x==0.0 && obstacles->points[i].y==0.0){
+            break;
+        }
         //sprawdza, czy punkt nie znajduje się za robotem
         if(obstacles->points[i].x<0){
            //nic nie robi, jak jest za robotem - zakres skanera zdaje się być większy niż 180 stopni
         }else{
             if(obstacles->points[i].x<distance && std::abs(obstacles->points[i].y)<robotWidth/2){
                 isFree = false;
-                makeMarker(obstacles->points[i].x, obstacles->points[i].y, 1,1,1);
+               // std::cout<<"punkt na drodze nr "<<i<<std::endl;
+                makeMarker(i, obstacles->points[i].x, obstacles->points[i].y, 1,1,1);
             }
         }
         /*
@@ -132,10 +156,6 @@ bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles){
             }
         }
         */
-        //kończy pętle, gdy dojdzie do pustych punktów
-        if(obstacles->points[i].x==0.0 && obstacles->points[i].y==0.0){
-            break;
-        }
     }
     //std::cout<<k<<" k"<<obstacles->points[k]<<" k+1 "<<obstacles->points[k+1]<<" k-1 "<<obstacles->points[k-1]<<std::endl;
     //std::cout<<l<<std::endl;
@@ -192,12 +212,12 @@ void makeMarker(geometry_msgs::PoseStamped pos, float r, float g, float b){
     marker.mesh_resource = "package://pr2_description/meshes/base_v0/base.dae";
     markerViz.publish( marker );
 }
-void makeMarker(float x, float y, float r, float g, float b){
+void makeMarker(int id, float x, float y, float r, float g, float b){
     visualization_msgs::Marker marker;
     marker.header.frame_id = "batman/base_laser_link";
     marker.header.stamp = ros::Time();
     marker.ns = "my_namespace";
-    marker.id = 0;
+    marker.id = id;
     marker.type = visualization_msgs::Marker::SPHERE;
     marker.action = visualization_msgs::Marker::ADD;
     marker.pose.position.x = x;

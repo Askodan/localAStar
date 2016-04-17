@@ -121,6 +121,10 @@ std::vector <geometry_msgs::Pose> Find_Path(){
     std::vector <geometry_msgs::Pose> somepath;
     return somepath;
 }
+float calculateDistance(geometry_msgs::Point32 p1, geometry_msgs::Point32 p2) {
+    return sqrt((p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y));
+}
+
 //funkcja posiada dwa założenia:
 //  a) chmura i punkt docelowy są w układzie robota
 //  b) cel jest dokładnie przed robotem
@@ -132,20 +136,24 @@ bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles){
     //int k = 0;
     //int l = 0;
     //ogólnie oś x - do przodu, oś y - w bok(jeśli wierzyć rvizowi, to w lewo), oś z do góry
-    for(int i =0;i<obstacles->points.capacity();i++){
+    for (int i = 1; i < obstacles->points.capacity(); i++){
         //kończy pętle, gdy dojdzie do pustych punktów
-        if(obstacles->points[i].x==0.0 && obstacles->points[i].y==0.0){
+        if(obstacles->points[i].x == 0.0 && obstacles->points[i].y == 0.0) {
             break;
         }
         //sprawdza, czy punkt nie znajduje się za robotem
-        if(obstacles->points[i].x<0){
+        if  (obstacles->points[i].x < 0) {
            //nic nie robi, jak jest za robotem - zakres skanera zdaje się być większy niż 180 stopni
-        }else{
-            if(obstacles->points[i].x<distance && std::abs(obstacles->points[i].y)<robotWidth/2){
+        } else {
+            if(obstacles->points[i].x < distance && std::abs(obstacles->points[i].y) < robotWidth / 2) {
                 isFree = false;
                // std::cout<<"punkt na drodze nr "<<i<<std::endl;
-                makeMarker(i, obstacles->points[i].x, obstacles->points[i].y, 1,1,1);
+                makeMarker(i, obstacles->points[i].x, obstacles->points[i].y, 1, 1, 1);
+            } else if (calculateDistance(obstacles->points[i], obstacles->points[i-1]) > robotWidth) {
+                ///jeśli dwa punkty są w odległości większej niż szerokość robota -> prawdopodobnie jest to przejście
+                makeMarker(i + 1024, obstacles->points[i].x, obstacles->points[i].y, 0, 255, 0);
             }
+
         }
         /*
         //znajduje punkt najbardziej z przodu robota

@@ -20,6 +20,8 @@ float robotWidth = 0.5;//ważny parametr grubości naszego ulubieńca najlepiej 
 bool Ruszaj_Batmobilu = false;
 tf::TransformListener* listener;
 
+uint8_t occupancyGrid[61][61];
+
 ///function dectarations
 void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg);
 void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg);
@@ -28,7 +30,7 @@ std::vector <geometry_msgs::Vector3> Find_Points(sensor_msgs::PointCloud* cloud,
 bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles);
 void makeMarker(geometry_msgs::PoseStamped pos, float r, float g, float b);
 void makeMarker(int id, float x, float y, float r, float g, float b);
-
+void FillOccupancyGrid(uint8_t grid[][61], sensor_msgs::PointCloud* cloud, int bucketsNumber, float bucketsSize);
 
 ///main
 int main(int argc, char **argv)
@@ -73,6 +75,7 @@ void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg)
     projector.projectLaser(*ptr, cloud);
     //to nie jest miejsce na wywołanie tej funkcji, ale do testu się nadaje
     isPathFree(goalPosition, &cloud);
+    FillOccupancyGrid(occupancyGrid, &cloud, 61, 0.1);
     //Find_Points(&cloud, newMsg);
 }
 
@@ -279,4 +282,41 @@ void makeMarker(int id, float x, float y, float r, float g, float b){
     //only if using a MESH_RESOURCE marker type:
     marker.mesh_resource = "package://pr2_description/meshes/base_v0/base.dae";
     markerViz.publish( marker );
+}
+
+void FillOccupancyGrid(uint8_t grid[][61], sensor_msgs::PointCloud* cloud, int bucketsNumber, float bucketsSize) {
+    ///idzie po pierścieniu
+    int yC = bucketsNumber / 2;
+    int xC = bucketsNumber / 2;
+
+    ///fill the grid with zeros
+    for (int i = 0; i < bucketsNumber; ++i) {
+        for (int j = 0; j < bucketsNumber; ++j) {
+            grid[i][j] = 0;
+        }
+    }
+
+    int translation = bucketsNumber / 2;
+
+    ///put the points in point cloud in grid
+    for (int i = 0; i < cloud->points.capacity(); ++i) {
+        if (std::abs(cloud->points[i].x <= 3.0) && std::abs(cloud->points[i].y <= 3.0)) {
+            int x = translation - (cloud->points[i].x / bucketsSize);
+            int y = translation - (cloud->points[i].y / bucketsSize);
+            //printf("trans: %d, x: %d, y: %d \n", translation, x, y);
+            grid[x][y] = 1;
+            makeMarker(i + 1000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
+        }
+    }
+
+    ///print the result
+    /*
+    for (int i = 0; i < bucketsNumber; ++i) {
+        for (int j = 0; j < bucketsNumber; ++j) {
+            printf("%d ", grid[i][j]);
+        }
+        printf("\n");
+    }
+    printf("\n\n\n");
+    */
 }

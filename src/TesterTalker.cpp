@@ -24,6 +24,7 @@ tf::TransformListener* listener;
 void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg);
 void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg);
 void UpdateCurrentPosition(geometry_msgs::Pose &newPose);
+std::vector <geometry_msgs::Vector3> Find_Points(sensor_msgs::PointCloud* cloud, const sensor_msgs::LaserScan::Ptr& scan);
 bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles);
 void makeMarker(geometry_msgs::PoseStamped pos, float r, float g, float b);
 void makeMarker(int id, float x, float y, float r, float g, float b);
@@ -58,10 +59,21 @@ int main(int argc, char **argv)
 void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg)
 {
     int scanNumber = scanMsg->scan_time / scanMsg->time_increment;
+    float maxValue = 5.0;
+    sensor_msgs::LaserScan::Ptr newMsg (new sensor_msgs::LaserScan(*scanMsg));
+
+    for(int i=0;i<scanMsg->ranges.capacity();i++){
+        if(std::isnan(scanMsg->ranges[i])) {
+            newMsg->ranges[i] = maxValue;
+        }
+    }
     sensor_msgs::PointCloud cloud;
-    projector.projectLaser(*scanMsg, cloud);
+    sensor_msgs::LaserScan::ConstPtr ptr (newMsg);
+
+    projector.projectLaser(*ptr, cloud);
     //to nie jest miejsce na wywołanie tej funkcji, ale do testu się nadaje
     isPathFree(goalPosition, &cloud);
+    //Find_Points(&cloud, newMsg);
 }
 
 void TfCallback(const tf2_msgs::TFMessage::ConstPtr& msg)
@@ -104,7 +116,7 @@ void UpdateCurrentPosition(geometry_msgs::Pose &newPose)
 
     try
     {
-        listener->lookupTransform("map", "batman/base_laser_link", ros::Time(0), transform);
+        listener->lookupTransform("batman/odom", "batman/base_laser_link", ros::Time(0), transform);
     }
     catch (tf::TransformException ex)
     {
@@ -121,6 +133,36 @@ std::vector <geometry_msgs::Pose> Find_Path(){
     std::vector <geometry_msgs::Pose> somepath;
     return somepath;
 }
+std::vector <geometry_msgs::Vector3> Find_Points(sensor_msgs::PointCloud* cloud, const sensor_msgs::LaserScan::Ptr&  scan){
+    std::vector <geometry_msgs::Vector3> points;
+    int center = 0, points_num = 0;
+    float centerAngle = 0.0;
+
+
+    centerAngle = (scan->angle_min) ;
+    std::cout<<"min "<< scan->angle_min <<"  incr " << scan->angle_increment << "center " << centerAngle
+            << " max "<< scan->angle_max<<std::endl;
+
+
+    center = int(std::abs( centerAngle / scan->angle_increment));
+
+    std::cout<<center<<" ("<<cloud->points[center].x<<", "<<cloud->points[center].y<<")"<<std::endl;
+    std::cout<<scan->ranges[center]<<std::endl<<std::endl;
+    /*for(int i = 0; i<cloud->points.capacity(); i++){
+        //kończy pętle, gdy dojdzie do pustych punktów
+        if(cloud->points[i].x==0.0 && obstacles->points[i].y==0.0){
+            break;
+        }
+        if(i>0){
+            if(obstacles->points[i-1].y*obstacles->points[i].y<0){
+                center=i;
+                l++;
+            }
+        }
+    }*/
+    return points;
+}
+
 //funkcja posiada dwa założenia:
 //  a) chmura i punkt docelowy są w układzie robota
 //  b) cel jest dokładnie przed robotem

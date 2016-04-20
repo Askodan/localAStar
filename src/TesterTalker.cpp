@@ -289,28 +289,60 @@ void FillOccupancyGrid(uint8_t grid[][61], sensor_msgs::PointCloud* cloud, int b
     int yC = bucketsNumber / 2;
     int xC = bucketsNumber / 2;
 
-    ///fill the grid with zeros
+    ///fill the grid with '2'
     for (int i = 0; i < bucketsNumber; ++i) {
         for (int j = 0; j < bucketsNumber; ++j) {
-            grid[i][j] = 0;
+            grid[i][j] = 2;
         }
     }
 
-    int translation = bucketsNumber / 2;
+    int tr = bucketsNumber / 2;
 
     ///put the points in point cloud in grid
     for (int i = 0; i < cloud->points.capacity(); ++i) {
-        if (std::abs(cloud->points[i].x <= 3.0) && std::abs(cloud->points[i].y <= 3.0)) {
-            int x = translation - (cloud->points[i].x / bucketsSize);
-            int y = translation - (cloud->points[i].y / bucketsSize);
+        if (cloud->points[i].x <= 3.0 && cloud->points[i].x >= 0 && std::abs(cloud->points[i].y <= 3.0)) {
+            int x = tr - (cloud->points[i].x / bucketsSize);
+            int y = tr - (cloud->points[i].y / bucketsSize);
             //printf("trans: %d, x: %d, y: %d \n", translation, x, y);
             grid[x][y] = 1;
-            makeMarker(i + 1000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
+            makeMarker(i + 1000, cloud->points[i].x, cloud->points[i].y, 1, 0, 0);
+        }
+    }
+
+    ///now fill the zeroes in map
+    for (int i = 1; i < bucketsNumber / 2 - 1; ++i) {
+        if(grid[xC + i + 1][yC] == 1) {
+            break;
+        } else {
+            grid[xC + i][yC] = 0;
+            makeMarker(i + 2000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
+        }
+
+        if(grid[xC][yC + i + 1] == 1) {
+            break;
+        } else {
+            grid[xC][yC + 1] = 0;
+            makeMarker(i + 3000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
+        }
+
+        for (int j = 1; j < i; ++j) {
+            if(grid[xC + j][yC + i] == 1)
+                continue;
+            if(grid[xC + j][yC + i + 1] == 1 || grid[xC + j + 1][yC + i + 1] == 1 || grid[xC + j - 1][yC + i + 1] == 1) {
+                grid[xC + j][yC + i] = 2;
+            } else {
+                grid[xC + j][yC + i] = 0;
+                makeMarker(i + 2000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
+            }
+
+        }
+
+        for (int j = 1; j < i; ++j) {
+
         }
     }
 
     ///print the result
-    /*
     for (int i = 0; i < bucketsNumber; ++i) {
         for (int j = 0; j < bucketsNumber; ++j) {
             printf("%d ", grid[i][j]);
@@ -318,5 +350,4 @@ void FillOccupancyGrid(uint8_t grid[][61], sensor_msgs::PointCloud* cloud, int b
         printf("\n");
     }
     printf("\n\n\n");
-    */
 }

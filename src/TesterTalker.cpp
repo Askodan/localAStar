@@ -9,6 +9,9 @@
 #include <sstream>
 #include <math.h>
 
+#include "MapMaker.h"
+#include "MakeMarker.h"
+
 ///global variables
 geometry_msgs::Pose goalPosition;
 geometry_msgs::Pose currentPosition;
@@ -20,7 +23,8 @@ float robotWidth = 0.5;//ważny parametr grubości naszego ulubieńca najlepiej 
 bool Ruszaj_Batmobilu = false;
 tf::TransformListener* listener;
 
-uint8_t occupancyGrid[61][61];
+uint8_t occupancyGrid[51][101];
+myMap* occupancyMap = NULL;
 
 ///function dectarations
 void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg);
@@ -28,10 +32,9 @@ void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg);
 void UpdateCurrentPosition(geometry_msgs::Pose &newPose);
 std::vector <geometry_msgs::Vector3> Find_Points(sensor_msgs::PointCloud* cloud, const sensor_msgs::LaserScan::Ptr& scan);
 bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles);
-void makeMarker(geometry_msgs::PoseStamped pos, float r, float g, float b);
-void makeMarker(int id, float x, float y, float r, float g, float b);
-void FillOccupancyGrid(uint8_t grid[][61], sensor_msgs::PointCloud* cloud, int bucketsNumber, float bucketsSize);
+void FillOccupancyGrid(uint8_t grid[][101], sensor_msgs::PointCloud* cloud, int bucketsNumber, float bucketsSize);
 
+//void FillOccupancyMap(uint8 *map, sensor_msgs::PointCloud* cloud, float bucketSize, float maxDist);
 ///main
 int main(int argc, char **argv)
 {
@@ -64,7 +67,7 @@ void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg)
     float maxValue = 5.0;
     sensor_msgs::LaserScan::Ptr newMsg (new sensor_msgs::LaserScan(*scanMsg));
 
-    for(int i=0;i<scanMsg->ranges.capacity();i++){
+    for(int i=0;i<scanMsg->ranges.size();i++){
         if(std::isnan(scanMsg->ranges[i])) {
             newMsg->ranges[i] = maxValue;
         }
@@ -75,7 +78,11 @@ void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg)
     projector.projectLaser(*ptr, cloud);
     //to nie jest miejsce na wywołanie tej funkcji, ale do testu się nadaje
     isPathFree(goalPosition, &cloud);
-    FillOccupancyGrid(occupancyGrid, &cloud, 61, 0.1);
+
+    // // FillOccupancyGrid(occupancyGrid, &cloud, 51, 0.1);
+
+    FillOccupancyMap2(occupancyMap, &cloud, 0.1, maxValue);
+    drawMap(occupancyMap, markerViz);
     //Find_Points(&cloud, newMsg);
 }
 
@@ -136,6 +143,7 @@ std::vector <geometry_msgs::Pose> Find_Path(){
     std::vector <geometry_msgs::Pose> somepath;
     return somepath;
 }
+//miało znaleźć punkty pośrednie do jazdy
 std::vector <geometry_msgs::Vector3> Find_Points(sensor_msgs::PointCloud* cloud, const sensor_msgs::LaserScan::Ptr&  scan){
     std::vector <geometry_msgs::Vector3> points;
     int center = 0, points_num = 0;
@@ -151,7 +159,7 @@ std::vector <geometry_msgs::Vector3> Find_Points(sensor_msgs::PointCloud* cloud,
 
     std::cout<<center<<" ("<<cloud->points[center].x<<", "<<cloud->points[center].y<<")"<<std::endl;
     std::cout<<scan->ranges[center]<<std::endl<<std::endl;
-    /*for(int i = 0; i<cloud->points.capacity(); i++){
+    /*for(int i = 0; i<cloud->points.size(); i++){
         //kończy pętle, gdy dojdzie do pustych punktów
         if(cloud->points[i].x==0.0 && obstacles->points[i].y==0.0){
             break;
@@ -177,7 +185,7 @@ bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles){
     //int k = 0;
     //int l = 0;
     //ogólnie oś x - do przodu, oś y - w bok(jeśli wierzyć rvizowi, to w lewo), oś z do góry
-    for(int i =0;i<obstacles->points.capacity();i++){
+    for(int i =0;i<obstacles->points.size();i++){
         //kończy pętle, gdy dojdzie do pustych punktów
         if(obstacles->points[i].x==0.0 && obstacles->points[i].y==0.0){
             break;
@@ -189,7 +197,7 @@ bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles){
             if(obstacles->points[i].x<distance && std::abs(obstacles->points[i].y)<robotWidth/2){
                 isFree = false;
                // std::cout<<"punkt na drodze nr "<<i<<std::endl;
-                makeMarker(i, obstacles->points[i].x, obstacles->points[i].y, 1,1,1);
+                makeMarker(markerViz, i, obstacles->points[i].x, obstacles->points[i].y, 1,1,1);
             }
         }
         /*
@@ -217,7 +225,7 @@ bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles){
 
     /* ważny test, który wykazał, że jak spotkamy punkt z dwoma zerami, to do końca tablicy wszystkie już takie będą, ale przy każdym skanie zera zaczynają się gdzie indziej
     bool zero=false;
-    for(int i =0;i<obstacles->points.capacity();i++){
+    for(int i =0;i<obstacles->points.size();i++){
         if(obstacles->points[i].x==0.0 && obstacles->points[i].y==0.0)
         {
             if(!zero)
@@ -231,60 +239,11 @@ bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles){
     }*/
     return isFree;
 }
-void makeMarker(geometry_msgs::PoseStamped pos, float r, float g, float b){
-    visualization_msgs::Marker marker;
-    marker.header.frame_id = "batman/base_laser_link";
-    marker.header.stamp = ros::Time();
-    marker.ns = "my_namespace";
-    marker.id = 0;
-    marker.type = visualization_msgs::Marker::SPHERE;
-    marker.action = visualization_msgs::Marker::ADD;
-    marker.pose.position.x = pos.pose.position.x;
-    marker.pose.position.y = pos.pose.position.y;
-    marker.pose.position.z = pos.pose.position.z;
-    marker.pose.orientation.x = pos.pose.orientation.x;
-    marker.pose.orientation.y = pos.pose.orientation.y;
-    marker.pose.orientation.z = pos.pose.orientation.z;
-    marker.pose.orientation.w = pos.pose.orientation.w;
-    marker.scale.x = 0.1;
-    marker.scale.y = 0.1;
-    marker.scale.z = 0.1;
-    marker.color.a = 1.0; // Don't forget to set the alpha!
-    marker.color.r = r;
-    marker.color.g = g;
-    marker.color.b = b;
-    //only if using a MESH_RESOURCE marker type:
-    marker.mesh_resource = "package://pr2_description/meshes/base_v0/base.dae";
-    markerViz.publish( marker );
-}
-void makeMarker(int id, float x, float y, float r, float g, float b){
-    visualization_msgs::Marker marker;
-    marker.header.frame_id = "batman/base_laser_link";
-    marker.header.stamp = ros::Time();
-    marker.ns = "my_namespace";
-    marker.id = id;
-    marker.type = visualization_msgs::Marker::SPHERE;
-    marker.action = visualization_msgs::Marker::ADD;
-    marker.pose.position.x = x;
-    marker.pose.position.y = y;
-    marker.pose.position.z = 0;
-    marker.pose.orientation.x = 0;
-    marker.pose.orientation.y = 0;
-    marker.pose.orientation.z = 0;
-    marker.pose.orientation.w = 1;
-    marker.scale.x = 0.1;
-    marker.scale.y = 0.1;
-    marker.scale.z = 0.1;
-    marker.color.a = 1.0; // Don't forget to set the alpha!
-    marker.color.r = r;
-    marker.color.g = g;
-    marker.color.b = b;
-    //only if using a MESH_RESOURCE marker type:
-    marker.mesh_resource = "package://pr2_description/meshes/base_v0/base.dae";
-    markerViz.publish( marker );
-}
 
-void FillOccupancyGrid(uint8_t grid[][61], sensor_msgs::PointCloud* cloud, int bucketsNumber, float bucketsSize) {
+// 0 - puste
+// 1 - przeszkoda
+// 2 - homoniewiadomo
+void FillOccupancyGrid(uint8_t grid[][101], sensor_msgs::PointCloud* cloud, int bucketsNumber, float bucketsSize) {
     ///idzie po pierścieniu
     int yC = bucketsNumber / 2;
     int xC = bucketsNumber / 2;
@@ -299,13 +258,13 @@ void FillOccupancyGrid(uint8_t grid[][61], sensor_msgs::PointCloud* cloud, int b
     int tr = bucketsNumber / 2;
 
     ///put the points in point cloud in grid
-    for (int i = 0; i < cloud->points.capacity(); ++i) {
+    for (int i = 0; i < cloud->points.size(); ++i) {
         if (cloud->points[i].x <= 3.0 && cloud->points[i].x >= 0 && std::abs(cloud->points[i].y <= 3.0)) {
             int x = tr - (cloud->points[i].x / bucketsSize);
             int y = tr - (cloud->points[i].y / bucketsSize);
             //printf("trans: %d, x: %d, y: %d \n", translation, x, y);
             grid[x][y] = 1;
-            makeMarker(i + 1000, cloud->points[i].x, cloud->points[i].y, 1, 0, 0);
+            makeMarker(markerViz, i + 1000, cloud->points[i].x, cloud->points[i].y, 1, 0, 0);
         }
     }
 
@@ -315,14 +274,14 @@ void FillOccupancyGrid(uint8_t grid[][61], sensor_msgs::PointCloud* cloud, int b
             break;
         } else {
             grid[xC + i][yC] = 0;
-            makeMarker(i + 2000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
+            makeMarker(markerViz, i + 2000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
         }
 
         if(grid[xC][yC + i + 1] == 1) {
             break;
         } else {
             grid[xC][yC + 1] = 0;
-            makeMarker(i + 3000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
+            makeMarker(markerViz, i + 3000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
         }
 
         for (int j = 1; j < i; ++j) {
@@ -332,7 +291,7 @@ void FillOccupancyGrid(uint8_t grid[][61], sensor_msgs::PointCloud* cloud, int b
                 grid[xC + j][yC + i] = 2;
             } else {
                 grid[xC + j][yC + i] = 0;
-                makeMarker(i + 2000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
+                makeMarker(markerViz, i + 2000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
             }
 
         }

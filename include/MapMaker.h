@@ -20,7 +20,7 @@ template <typename T> struct Position{
         y=_y;
     }
 };
-struct myMap{
+class myMap{
 private:
 	uint8_t* map = NULL;
 public: 	
@@ -107,6 +107,14 @@ public:
         int yi = int((y)/sizeBlock+sizeX-1);
         if(x>=0)
             SetMap(xi, yi, val);
+    }
+
+    int GetXSize(){
+        return sizeX;
+    }
+
+    int GetYSize(){
+        return sizeY;
     }
 };
 void FillOccupancyMap(myMap *&map, sensor_msgs::PointCloud* cloud, float bucketSize, float maxDist);

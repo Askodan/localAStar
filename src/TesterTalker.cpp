@@ -11,6 +11,7 @@
 
 #include "MapMaker.h"
 #include "MakeMarker.h"
+#include "node.h"
 
 ///global variables
 geometry_msgs::Pose goalPosition;
@@ -23,8 +24,8 @@ float robotWidth = 0.5;//ważny parametr grubości naszego ulubieńca najlepiej 
 bool Ruszaj_Batmobilu = false;
 tf::TransformListener* listener;
 
-uint8_t occupancyGrid[51][101];
 myMap* occupancyMap = NULL;
+std::string path = "";
 
 ///function dectarations
 void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg);
@@ -32,9 +33,7 @@ void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg);
 void UpdateCurrentPosition(geometry_msgs::Pose &newPose);
 std::vector <geometry_msgs::Vector3> Find_Points(sensor_msgs::PointCloud* cloud, const sensor_msgs::LaserScan::Ptr& scan);
 bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles);
-void FillOccupancyGrid(uint8_t grid[][101], sensor_msgs::PointCloud* cloud, int bucketsNumber, float bucketsSize);
 
-//void FillOccupancyMap(uint8 *map, sensor_msgs::PointCloud* cloud, float bucketSize, float maxDist);
 ///main
 int main(int argc, char **argv)
 {
@@ -79,8 +78,6 @@ void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg)
     //to nie jest miejsce na wywołanie tej funkcji, ale do testu się nadaje
     isPathFree(goalPosition, &cloud);
 
-    // // FillOccupancyGrid(occupancyGrid, &cloud, 51, 0.1);
-
     FillOccupancyMap2(occupancyMap, &cloud, 0.1, maxValue);
     drawMap(occupancyMap, markerViz);
     //Find_Points(&cloud, newMsg);
@@ -117,6 +114,9 @@ void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg)
     float y = transformed_goalMsg.pose.position.y;
     float z = transformed_goalMsg.pose.position.z;
     printf("goal: x, y, z: %f, %f, %f\n", x, y, z);
+
+    Node nod(0, 0, 0, 0);
+    pathFind(0, 0, x, y, occupancyMap);
 
 }
 
@@ -240,73 +240,3 @@ bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles){
     return isFree;
 }
 
-// 0 - puste
-// 1 - przeszkoda
-// 2 - homoniewiadomo
-void FillOccupancyGrid(uint8_t grid[][101], sensor_msgs::PointCloud* cloud, int bucketsNumber, float bucketsSize) {
-    ///idzie po pierścieniu
-    int yC = bucketsNumber / 2;
-    int xC = bucketsNumber / 2;
-
-    ///fill the grid with '2'
-    for (int i = 0; i < bucketsNumber; ++i) {
-        for (int j = 0; j < bucketsNumber; ++j) {
-            grid[i][j] = 2;
-        }
-    }
-
-    int tr = bucketsNumber / 2;
-
-    ///put the points in point cloud in grid
-    for (int i = 0; i < cloud->points.size(); ++i) {
-        if (cloud->points[i].x <= 3.0 && cloud->points[i].x >= 0 && std::abs(cloud->points[i].y <= 3.0)) {
-            int x = tr - (cloud->points[i].x / bucketsSize);
-            int y = tr - (cloud->points[i].y / bucketsSize);
-            //printf("trans: %d, x: %d, y: %d \n", translation, x, y);
-            grid[x][y] = 1;
-            makeMarker(markerViz, i + 1000, cloud->points[i].x, cloud->points[i].y, 1, 0, 0);
-        }
-    }
-
-    ///now fill the zeroes in map
-    for (int i = 1; i < bucketsNumber / 2 - 1; ++i) {
-        if(grid[xC + i + 1][yC] == 1) {
-            break;
-        } else {
-            grid[xC + i][yC] = 0;
-            makeMarker(markerViz, i + 2000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
-        }
-
-        if(grid[xC][yC + i + 1] == 1) {
-            break;
-        } else {
-            grid[xC][yC + 1] = 0;
-            makeMarker(markerViz, i + 3000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
-        }
-
-        for (int j = 1; j < i; ++j) {
-            if(grid[xC + j][yC + i] == 1)
-                continue;
-            if(grid[xC + j][yC + i + 1] == 1 || grid[xC + j + 1][yC + i + 1] == 1 || grid[xC + j - 1][yC + i + 1] == 1) {
-                grid[xC + j][yC + i] = 2;
-            } else {
-                grid[xC + j][yC + i] = 0;
-                makeMarker(markerViz, i + 2000, cloud->points[i].x, cloud->points[i].y, 0, 0, 1);
-            }
-
-        }
-
-        for (int j = 1; j < i; ++j) {
-
-        }
-    }
-
-    ///print the result
-    for (int i = 0; i < bucketsNumber; ++i) {
-        for (int j = 0; j < bucketsNumber; ++j) {
-            printf("%d ", grid[i][j]);
-        }
-        printf("\n");
-    }
-    printf("\n\n\n");
-}

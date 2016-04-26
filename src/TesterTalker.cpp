@@ -79,7 +79,7 @@ void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg)
     isPathFree(goalPosition, &cloud);
 
     FillOccupancyMap2(occupancyMap, &cloud, 0.1, maxValue);
-    drawMap(occupancyMap, markerViz);
+    //drawMap(occupancyMap, markerViz);
     //Find_Points(&cloud, newMsg);
 }
 
@@ -115,8 +115,15 @@ void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg)
     float z = transformed_goalMsg.pose.position.z;
     printf("goal: x, y, z: %f, %f, %f\n", x, y, z);
 
-    Node nod(0, 0, 0, 0);
-    pathFind(0, 0, x, y, occupancyMap);
+    float blockSize = occupancyMap->GetBlockSize();
+    int xSize = occupancyMap->GetXSize();
+
+    int xi = int((x) / blockSize);
+    int yi = int((y) / blockSize + xSize - 1);
+    printf("goal in map : %d, %d \n", xi, yi);
+
+    std::string path = pathFind(0, xSize + 1, xi, yi, occupancyMap);
+    VisualizePath(path, occupancyMap, markerViz);
 
 }
 

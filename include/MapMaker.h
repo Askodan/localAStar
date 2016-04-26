@@ -116,6 +116,10 @@ public:
     int GetYSize(){
         return sizeY;
     }
+
+    float GetBlockSize() {
+        return sizeBlock;
+    }
 };
 void FillOccupancyMap(myMap *&map, sensor_msgs::PointCloud* cloud, float bucketSize, float maxDist);
 void FillOccupancyMap2(myMap *&map, sensor_msgs::PointCloud* cloud, float bucketSize, float maxDist);

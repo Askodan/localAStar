@@ -58,5 +58,6 @@ class Node
 };
 
 std::string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map);
+void VisualizePath(std::string route, myMap *map, ros::Publisher pub);
 
 #endif // NODE_H

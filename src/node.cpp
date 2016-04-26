@@ -1,4 +1,5 @@
 #include "node.h"
+#include "MakeMarker.h"
 #include <iostream>
 #include <iomanip>
 #include <queue>
@@ -19,7 +20,7 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map )
     int pqi; // pq index
     Node* n0;
     Node* m0;
-    int i, j, x, y, xdx, ydy;
+    int i = 0, j = 0, x = 0, y = 0, xdx = 0, ydy = 0;
     char c;
 
     int xSize = map->GetXSize();
@@ -29,10 +30,12 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map )
     int dir_map[xSize][ySize];
     int dir = 8;
 
+    printf("Map details: size: (%d, %d), goal position: %d, %d \n", xSize, ySize, xFinish, yFinish);
+
     pqi=0;
 
     // reset the Node maps
-    for (y = 0; ySize < ySize; y++)
+    for (y = 0; y < ySize; y++)
     {
         for (x = 0; x < xSize; x++)
         {
@@ -45,6 +48,7 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map )
     n0 = new Node(xStart, yStart, 0, 0);
     n0->UpdatePriority(xFinish, yFinish);
     pq[pqi].push(*n0);
+
     open_nodes_map[x][y] = n0->GetPriority(); // mark it on the open Nodes map
 
     // A* search
@@ -66,6 +70,8 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map )
         //if((*n0).estimate(xFinish, yFinish) == 0)
         if (x == xFinish && y == yFinish)
         {
+            printf("Path found\n");
+
             // generate the path from finish to start
             // by following the directions
             string path = "";
@@ -82,6 +88,8 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map )
             delete n0;
             // empty the leftover Nodes
             while(!pq[pqi].empty()) pq[pqi].pop();
+
+            std::cout << "PATH FOUND " << path << '\n' << std::endl;
             return path;
         }
 
@@ -141,6 +149,7 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map )
         }
         delete n0; // garbage collection
     }
+    printf("No route found! \n");
     return ""; // no route found
 }
 
@@ -148,4 +157,29 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map )
 bool operator<(const Node &a, const Node &b)
 {
     return a.GetPriority() > b.GetPriority();
+}
+
+void VisualizePath(std::string route, myMap *map, ros::Publisher pub){
+    // follow the route on the map and display it
+    if(route.length()>0)
+    {
+        int j; char c;
+
+        ///start point
+        int sizeX = map->GetXSize();
+        int x = 0;
+        int y = sizeX + 1;
+
+        for (int i = 0; i < route.length(); i++)
+        {
+            c = route.at(i);
+            j = atoi(&c);
+            x = x + dx[j];
+            y = y + dy[j];
+
+            Position<float> p = map->getPos(sizeX * y + x);
+            printf("Position of marker: map(%d, %d), global(%f, %f) \n", x, y, p.x, p.y);
+            makeMarker(pub, i + 10000, p.x, p.y, (float)0, (float)1, (float)1, (float)1);
+        }
+    }
 }

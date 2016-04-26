@@ -10,11 +10,11 @@
 using namespace std;
 
 //directions
-static int dx[dir]={1, 1, 0, -1, -1, -1, 0, 1};
-int dy[dir]={0, 1, 1, 1, 0, -1, -1, -1};
+static int dx[dir] = {1, 1, 0, -1, -1, -1, 0, 1};
+int dy[dir] = {0, 1, 1, 1, 0, -1, -1, -1};
 
 
-string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map )
+string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map)
 {
     priority_queue<Node> pq[2]; // list of open (not-yet-tried) Nodes
     int pqi; // pq index
@@ -77,9 +77,26 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map )
             string path = "";
             while (!(x == xStart && y == yStart))
             {
+                //printf("Map value: %d\n", map->GetMap(x, y));
                 j = dir_map[x][y];
                 c = '0'+ (j + dir / 2) % dir;
                 path = c + path;
+
+                x += dx[j];
+                y += dy[j];
+            }
+
+            //delete unknown places
+            printf("Path length: %d\n", path.length());
+            for (int i = 0; i < path.length(); ++i) {
+                printf("Map value: %d\n",map->GetMap(x, y));
+                if(map->GetMap(x, y) == 200) {
+                    printf("Erasing path at %d\n", i);
+                    path.erase(i);
+                    break;
+                }
+
+                j = dir_map[x][y];
                 x += dx[j];
                 y += dy[j];
             }
@@ -98,12 +115,11 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map )
         {
             xdx = x + dx[i]; ydy = y + dy[i];
 
-            if (!(xdx < 0 || xdx > xSize - 1 || ydy < 0 || ydy > ySize - 1 || map->GetMap(xdx, ydy ) >= 200
+            if (!(xdx < 0 || xdx > xSize - 1 || ydy < 0 || ydy > ySize - 1 || map->GetMap(xdx, ydy ) > 200
                 || closed_nodes_map[xdx][ydy] == 1))
             {
                 // generate a child Node
-                m0=new Node( xdx, ydy, n0->GetLevel(),
-                             n0->GetPriority());
+                m0 = new Node( xdx, ydy, n0->GetLevel(), n0->GetPriority());
                 m0->NextLevel(i);
                 m0->UpdatePriority(xFinish, yFinish);
 
@@ -178,7 +194,6 @@ void VisualizePath(std::string route, myMap *map, ros::Publisher pub){
             y = y + dy[j];
 
             Position<float> p = map->getPos(sizeX * y + x);
-            printf("Position of marker: map(%d, %d), global(%f, %f) \n", x, y, p.x, p.y);
             makeMarker(pub, i + 10000, p.x, p.y, (float)0, (float)1, (float)1, (float)1);
         }
     }

@@ -1,0 +1,6 @@
+Terminal1: roscore
+Terminal2: rosparam set /use_sim_time true
+Terminal3: rviz
+Terminal4: rosbag play -l --clock sciezka_z_plikiem
+rviz: Fixed Frame na batman/odom
+Teraz powinien być widoczny skan laserowy :D

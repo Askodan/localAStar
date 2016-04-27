@@ -70,7 +70,7 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map)
         //if((*n0).estimate(xFinish, yFinish) == 0)
         if (x == xFinish && y == yFinish)
         {
-            printf("Path found\n");
+           /// printf("Path found\n");
 
             // generate the path from finish to start
             // by following the directions
@@ -87,11 +87,11 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map)
             }
 
             //delete unknown places
-            printf("Path length: %d\n", path.length());
+            ///printf("Path length: %d\n", (int)path.length());
             for (int i = 0; i < path.length(); ++i) {
-                printf("Map value: %d\n",map->GetMap(x, y));
+               /// printf("Map value: %d\n",(int)map->GetMap(x, y));
                 if(map->GetMap(x, y) == 200) {
-                    printf("Erasing path at %d\n", i);
+                   /// printf("Erasing path at %d\n", i);
                     path.erase(i);
                     break;
                 }
@@ -106,7 +106,7 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map)
             // empty the leftover Nodes
             while(!pq[pqi].empty()) pq[pqi].pop();
 
-            std::cout << "PATH FOUND " << path << '\n' << std::endl;
+          ///  std::cout << "PATH FOUND " << path << '\n' << std::endl;
             return path;
         }
 
@@ -197,4 +197,92 @@ void VisualizePath(std::string route, myMap *map, ros::Publisher pub){
             makeMarker(pub, i + 10000, p.x, p.y, (float)0, (float)1, (float)1, (float)1);
         }
     }
+}
+
+//chcę skrócić drogę... w tym celu zakładam sobie vector(bo lubię vectory) punktów, który skrócę do przejezdnego minimum
+//zakładamy, że punkt 0, to punkt w którym jest robot
+bool IsRunnable(geometry_msgs::Vector3 point1, geometry_msgs::Vector3 point2, sensor_msgs::PointCloud* obstacles, float robotWidth);
+std::vector <geometry_msgs::Vector3> PathShortener(std::vector <geometry_msgs::Vector3> path, sensor_msgs::PointCloud* obstacles, float robotWidth){
+    std::vector <geometry_msgs::Vector3> simple_path;
+    simple_path.push_back(path[0]);
+    for(int i = 0; i < path.size()-2; i++)
+    {
+        for(int j = i+2; j<path.size();j++){
+            if(IsRunnable(path[i], path[j], obstacles, robotWidth)){
+
+            }else{
+                simple_path.push_back(path[j-1]);
+                i=j-1;
+                break;
+            }
+        }
+    }
+    simple_path.push_back(path[path.size()-1]);
+    return simple_path;
+}
+geometry_msgs::Vector3 operator-(geometry_msgs::Vector3 p1, geometry_msgs::Vector3 p2){
+    geometry_msgs::Vector3 substract;
+    substract.x = p1.x-p2.x;
+    substract.y = p1.y-p2.y;
+    substract.z = p1.z-p2.z;
+    return substract;
+}
+geometry_msgs::Vector3 operator+(geometry_msgs::Vector3 p1, geometry_msgs::Vector3 p2){
+    geometry_msgs::Vector3 sum;
+    sum.x = p1.x+p2.x;
+    sum.y = p1.y+p2.y;
+    sum.z = p1.z+p2.z;
+    return sum;
+}
+geometry_msgs::Vector3 operator/(geometry_msgs::Vector3 p1, double x){
+    geometry_msgs::Vector3 divided;
+    divided.x = p1.x/x;
+    divided.y = p1.y/x;
+    divided.z = p1.z/x;
+    return divided;
+}
+double dotProductWithoutZ(geometry_msgs::Vector3 A, geometry_msgs::Vector3 B);
+bool IsRunnable(geometry_msgs::Vector3 point1, geometry_msgs::Vector3 point2, sensor_msgs::PointCloud* obstacles, float robotWidth){
+    //todo niechaj działa
+    //szukanie punktu środkowego
+    //punkty i wektory: substraction - wektor między P1 i P2, median - punkt po środku między P1 i P2, A,B,C - punkty prostokąta
+    geometry_msgs::Vector3 substraction(point1-point2), median((point1+point2)/2), A, B, C, AB, BC, AP, BP;
+    float angle = atan2(substraction.y, substraction.x), maxCircle = (M_SQRT2*robotWidth+std::sqrt(substraction.x*substraction.x+substraction.y*substraction.y))/2;
+    maxCircle*=maxCircle;
+    std::vector <geometry_msgs::Vector3> suspected;
+
+    for(int i = 0; i< obstacles->points.size(); i++){
+        //czy punkt mieści się w wielkim kole, jak tak, to na listę podejrzanych
+        if(std::pow(obstacles->points[i].x - median.x, 2)+ std::pow(obstacles->points[i].y - median.y, 2)<maxCircle){
+            geometry_msgs::Vector3 point;
+            point.x = obstacles->points[i].x;
+            point.y = obstacles->points[i].y;
+            point.z = 0;
+            suspected.push_back(point);
+        }
+    }
+    if(suspected.size()==0){
+        return true;
+    }
+
+    //obliczamy resztę prostokąta
+    A.x = point1.x+std::cos(angle+M_PI_2+M_PI_4); A.y = point1.y+std::sin(angle+M_PI_2+M_PI_4); A.z = 0;
+    B.x = point1.x+std::cos(angle-M_PI_2-M_PI_4); B.y = point1.y+std::sin(angle-M_PI_2-M_PI_4); B.z = 0;
+    C.x = point2.x+std::cos(angle-M_PI_4); C.y = point2.y+std::sin(angle-M_PI_4); C.z = 0;
+    AB = B-A;
+    BC = C-B;
+    for(int i = 0; i<suspected.size(); i++){
+        AP = suspected[i]-A;
+        BP = suspected[i]-B;
+        double dotAP = dotProductWithoutZ(AB, AP), dotBP = dotProductWithoutZ(BC, BP);
+        //test iloczynów skalarnych
+        if(0<dotAP && dotAP<dotProductWithoutZ(AB, AB) && 0<dotBP && dotBP<dotProductWithoutZ(BC, BC)){
+            return false;
+        }
+    }
+
+    return true;
+}
+double dotProductWithoutZ(geometry_msgs::Vector3 A, geometry_msgs::Vector3 B){
+    return (A.x*B.x+A.y*B.y);
 }

@@ -33,6 +33,15 @@ public:
         sizeY = 0;
 		map = NULL;	
 	}
+    //płytka kopia
+    myMap(const myMap& original){
+        sizeX = original.sizeX;
+        sizeY = original.sizeY;
+        sizeBlock = original.sizeBlock;
+        Length = original.Length;
+        map = new uint8_t[Length];
+    }
+
     myMap(int a, float blockSize){
 		map = new uint8_t[(a+1)*(2*a+1)];
    		sizeX = a+1;
@@ -48,7 +57,7 @@ public:
 			return map[x+y*sizeX];	
 		}
 		else{
-			std::cout<<"Nie ma takiego miejsca na mapie!"<<std::endl;
+            std::cout<<"Nie ma takiego miejsca na mapie! get int int"<<std::endl;
             return 0;
         }
 	}
@@ -57,7 +66,7 @@ public:
             return map[pos.x+pos.y*sizeX];
         }
         else{
-            std::cout<<"Nie ma takiego miejsca na mapie!"<<std::endl;
+            std::cout<<"Nie ma takiego miejsca na mapie! get pos<int>"<<std::endl;
             return 0;
         }
     }
@@ -65,7 +74,7 @@ public:
         if(i>=0&&i<Length)
             return map[i];
         else{
-            std::cout<<"Nie ma takiego miejsca na mapie!"<<std::endl;
+            std::cout<<"Nie ma takiego miejsca na mapie! get int"<<std::endl;
             return 0;
         }
     }
@@ -73,8 +82,8 @@ public:
         if(i>=0&&i<Length){
             return Position<float>((i)%sizeX*sizeBlock, (i/sizeX-sizeX+1)*sizeBlock);
         }else{
-            std::cout<<"Nie ma takiego miejsca na mapie!"<<std::endl;
-            return Position<float>(-1,-1);
+            std::cout<<"Nie ma takiego miejsca na mapie! getpos"<<std::endl;
+            return Position<float>(-1,0);
         }
     }
 
@@ -91,7 +100,7 @@ public:
 			map[x+y*sizeX] = val;	
 		}
 		else{
-			std::cout<<"Nie ma takiego miejsca na mapie!"<<std::endl;
+            std::cout<<"Nie ma takiego miejsca na mapie! set "<<x<<", "<<y<<std::endl;
 		}
 	}
     void SetMap(Position<int> pos, uint8_t val){
@@ -99,14 +108,19 @@ public:
             map[pos.x+pos.y*sizeX] = val;
         }
         else{
-            std::cout<<"Nie ma takiego miejsca na mapie!"<<std::endl;
+            std::cout<<"Nie ma takiego miejsca na mapie!set pos<int>"<<std::endl;
         }
     }
     void SetMap(float x, float y, uint8_t val){
         int xi = int((x)/sizeBlock);
-        int yi = int((y)/sizeBlock+sizeX-1);
+        int yi = int((y)/sizeBlock+sizeX);
         if(x>=0)
             SetMap(xi, yi, val);
+    }
+    void SetMap(int i, u_int8_t val) {
+        if(i>=0&&i<Length){
+            map[i] = val;
+        }
     }
 
     int GetXSize(){
@@ -125,4 +139,5 @@ void FillOccupancyMap(myMap *&map, sensor_msgs::PointCloud* cloud, float bucketS
 void FillOccupancyMap2(myMap *&map, sensor_msgs::PointCloud* cloud, float bucketSize, float maxDist);
 void drawMap(myMap * map, ros::Publisher pub);
 int numberNeig(myMap *map, Position<int> here, int step);
+myMap* mask(myMap *map, int size);
 #endif

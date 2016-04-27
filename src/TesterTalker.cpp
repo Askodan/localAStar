@@ -12,16 +12,23 @@
 #include "MapMaker.h"
 #include "MakeMarker.h"
 #include "node.h"
+#include "RobotSteering.h"
 
 ///global variables
 geometry_msgs::Pose goalPosition;
+geometry_msgs::PoseStamped::ConstPtr globalGoalPosition;
 geometry_msgs::Pose currentPosition;
+
 const double tf::Transformer::DEFAULT_CACHE_TIME = 10.0;
 laser_geometry::LaserProjection projector;
 //ros::Publisher pointPub;
 ros::Publisher markerViz;
+ros::Publisher cmd_vel;
 float robotWidth = 0.5;//ważny parametr grubości naszego ulubieńca najlepiej podawać wraz z zapasem odległości od przeszkód
+float plannerRange = 5;
 bool Ruszaj_Batmobilu = false;
+bool Skanuj_Batmobilu = false;
+bool turn2Target = false;
 tf::TransformListener* listener;
 
 myMap* occupancyMap = NULL;
@@ -33,7 +40,8 @@ void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg);
 void UpdateCurrentPosition(geometry_msgs::Pose &newPose);
 std::vector <geometry_msgs::Vector3> Find_Points(sensor_msgs::PointCloud* cloud, const sensor_msgs::LaserScan::Ptr& scan);
 bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles);
-
+void BatmanFindPath(geometry_msgs::PoseStamped transformed_goalMsg);
+geometry_msgs::PoseStamped transformGoal(const geometry_msgs::PoseStamped::ConstPtr& goalMsg);
 ///main
 int main(int argc, char **argv)
 {
@@ -43,13 +51,31 @@ int main(int argc, char **argv)
     ros::Subscriber subScan = n.subscribe("/batman/scan", 100, ScanCallback);
     ros::Subscriber goalSub = n.subscribe("/move_base_simple/goal", 20, GoalCallback);
     //pointPub = n.advertise<geometry_msgs::PoseStamped>("/path/chwilowy", 1000);
+    cmd_vel = n.advertise<geometry_msgs::Twist>("/batman/cmd_vel", 1);
     markerViz = n.advertise<visualization_msgs::Marker>("/markers", 1000);
     listener = new tf::TransformListener();
     ros::Rate loop_rate(10);
-
+    RobotSteering RS();
     while (ros::ok())
     {
         //UpdateCurrentPosition(currentPosition);
+
+        /*if(turn2Target){
+            geometry_msgs::PoseStamped tr_goal = transformGoal(globalGoalPosition);
+            double angle = std::atan2(tr_goal.pose.position.y, tr_goal.pose.position.x);
+            double dist = tr_goal.pose.position.x*tr_goal.pose.position.x+tr_goal.pose.position.y*tr_goal.pose.position.y;
+            if(angle>0.1){
+                geometry_msgs::Twist twist;
+                twist.linear = 0;
+                twist.angular = RS.calculateAngularSpeed(0, angle);
+                cmd_vel.publish(twist);
+            }else{
+                Skanuj_Batmobilu = true;
+                if(!Ruszaj_Batmobilu){
+
+                }
+            }
+        }*/
 
         ros::spinOnce();
 
@@ -63,22 +89,31 @@ int main(int argc, char **argv)
 void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg)
 {
     int scanNumber = scanMsg->scan_time / scanMsg->time_increment;
-    float maxValue = 5.0;
-    sensor_msgs::LaserScan::Ptr newMsg (new sensor_msgs::LaserScan(*scanMsg));
+    float maxValue = 5.5;
 
+    /*sensor_msgs::LaserScan::Ptr newMsg (new sensor_msgs::LaserScan(*scanMsg));
     for(int i=0;i<scanMsg->ranges.size();i++){
         if(std::isnan(scanMsg->ranges[i])) {
             newMsg->ranges[i] = maxValue;
         }
-    }
+    }*/
     sensor_msgs::PointCloud cloud;
-    sensor_msgs::LaserScan::ConstPtr ptr (newMsg);
+    //sensor_msgs::LaserScan::ConstPtr ptr (newMsg);
 
-    projector.projectLaser(*ptr, cloud);
+    projector.projectLaser(*scanMsg, cloud);
     //to nie jest miejsce na wywołanie tej funkcji, ale do testu się nadaje
     isPathFree(goalPosition, &cloud);
 
     FillOccupancyMap2(occupancyMap, &cloud, 0.1, maxValue);
+    occupancyMap = mask(occupancyMap, 2);
+
+    if(globalGoalPosition.get()){
+        std::cout<<globalGoalPosition->header.frame_id<<" x: "<<globalGoalPosition->pose.position.x<<" y: "<<globalGoalPosition->pose.position.y<<std::endl;
+        geometry_msgs::PoseStamped tr_goal = transformGoal(globalGoalPosition);
+        std::cout<<tr_goal.header.frame_id<<" x: "<<tr_goal.pose.position.x<<" y: "<<tr_goal.pose.position.y<<std::endl;
+        BatmanFindPath( tr_goal);
+    }
+
     //drawMap(occupancyMap, markerViz);
     //Find_Points(&cloud, newMsg);
 }
@@ -87,9 +122,7 @@ void TfCallback(const tf2_msgs::TFMessage::ConstPtr& msg)
 {
 
 }
-
-void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg)
-{
+geometry_msgs::PoseStamped transformGoal(const geometry_msgs::PoseStamped::ConstPtr& goalMsg){
     //przeliczam goal na współrzędne robota
     tf::Stamped<tf::Pose> goal, transformed_goal;
     geometry_msgs::PoseStamped transformed_goalMsg;
@@ -106,6 +139,12 @@ void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg)
         ROS_ERROR("%s",ex.what());
         ros::Duration(1.0).sleep();
     }
+    return transformed_goalMsg;
+}
+void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg)
+{
+    globalGoalPosition = goalMsg;
+    geometry_msgs::PoseStamped transformed_goalMsg = transformGoal(goalMsg);
 
     ///copy the given goal to global variable
     memcpy(&goalPosition, &(transformed_goalMsg.pose), sizeof(goalPosition));
@@ -115,16 +154,27 @@ void GoalCallback(const geometry_msgs::PoseStamped::ConstPtr& goalMsg)
     float z = transformed_goalMsg.pose.position.z;
     printf("goal: x, y, z: %f, %f, %f\n", x, y, z);
 
+    /*
+    if(x*x+y*y<plannerRange*plannerRange){
+        turn2Target = true;
+    }
+    else{
+        std::cout<<"Cel poza zasięgiem planera ("<<plannerRange<<" m)!"<<std::endl;
+    }
+    */
+}
+void BatmanFindPath(geometry_msgs::PoseStamped transformed_goalMsg){
+    float x = transformed_goalMsg.pose.position.x;
+    float y = transformed_goalMsg.pose.position.y;
+
     float blockSize = occupancyMap->GetBlockSize();
     int xSize = occupancyMap->GetXSize();
 
     int xi = int((x) / blockSize);
     int yi = int((y) / blockSize + xSize - 1);
     printf("goal in map : %d, %d \n", xi, yi);
-
     std::string path = pathFind(0, xSize + 1, xi, yi, occupancyMap);
     VisualizePath(path, occupancyMap, markerViz);
-
 }
 
 void UpdateCurrentPosition(geometry_msgs::Pose &newPose)
@@ -146,7 +196,7 @@ void UpdateCurrentPosition(geometry_msgs::Pose &newPose)
 
     printf("New pose: %f, %f, %f\n", newPose.position.x, newPose.position.y, newPose.position.z);
 }
-std::vector <geometry_msgs::Pose> Find_Path(){
+/*std::vector <geometry_msgs::Pose> Find_Path(){
     std::vector <geometry_msgs::Pose> somepath;
     return somepath;
 }
@@ -177,9 +227,9 @@ std::vector <geometry_msgs::Vector3> Find_Points(sensor_msgs::PointCloud* cloud,
                 l++;
             }
         }
-    }*/
+    }* /
     return points;
-}
+}*/
 
 //funkcja posiada dwa założenia:
 //  a) chmura i punkt docelowy są w układzie robota
@@ -204,7 +254,7 @@ bool isPathFree(geometry_msgs::Pose there, sensor_msgs::PointCloud* obstacles){
             if(obstacles->points[i].x<distance && std::abs(obstacles->points[i].y)<robotWidth/2){
                 isFree = false;
                // std::cout<<"punkt na drodze nr "<<i<<std::endl;
-                makeMarker(markerViz, i, obstacles->points[i].x, obstacles->points[i].y, 1,1,1);
+                ///makeMarker(markerViz, i, obstacles->points[i].x, obstacles->points[i].y, 1,1,1);
             }
         }
         /*

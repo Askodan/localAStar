@@ -108,10 +108,12 @@ void ScanCallback(const sensor_msgs::LaserScan::ConstPtr& scanMsg)
     occupancyMap = mask(occupancyMap, 2);
 
     if(globalGoalPosition.get()){
-        std::cout<<globalGoalPosition->header.frame_id<<" x: "<<globalGoalPosition->pose.position.x<<" y: "<<globalGoalPosition->pose.position.y<<std::endl;
+        std::cout<< "Goal position : id: "<<globalGoalPosition->header.frame_id
+                << ", x: "<<globalGoalPosition->pose.position.x
+                << ", y: "<<globalGoalPosition->pose.position.y<<std::endl;
         geometry_msgs::PoseStamped tr_goal = transformGoal(globalGoalPosition);
-        std::cout<<tr_goal.header.frame_id<<" x: "<<tr_goal.pose.position.x<<" y: "<<tr_goal.pose.position.y<<std::endl;
-        BatmanFindPath( tr_goal);
+        std::cout<<tr_goal.header.frame_id<<" x: "<<tr_goal.pose.position.x<<" y: "<<tr_goal.pose.position.y<<std::endl<<std::endl;;
+        BatmanFindPath(tr_goal);
     }
 
     //drawMap(occupancyMap, markerViz);
@@ -172,7 +174,7 @@ void BatmanFindPath(geometry_msgs::PoseStamped transformed_goalMsg){
 
     int xi = int((x) / blockSize);
     int yi = int((y) / blockSize + xSize - 1);
-    printf("goal in map : %d, %d \n", xi, yi);
+    //printf("goal in map : %d, %d \n", xi, yi);
     std::string path = pathFind(0, xSize + 1, xi, yi, occupancyMap);
     VisualizePath(path, occupancyMap, markerViz);
 }

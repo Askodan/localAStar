@@ -30,8 +30,6 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map)
     int dir_map[xSize][ySize];
     int dir = 8;
 
-    printf("Map details: size: (%d, %d), goal position: %d, %d \n", xSize, ySize, xFinish, yFinish);
-
     pqi=0;
 
     // reset the Node maps
@@ -75,31 +73,30 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map)
             // generate the path from finish to start
             // by following the directions
             string path = "";
+            int lastUnknownOccurence = -1;
+            int iterator = 0;
+
             while (!(x == xStart && y == yStart))
             {
-                //printf("Map value: %d\n", map->GetMap(x, y));
                 j = dir_map[x][y];
                 c = '0'+ (j + dir / 2) % dir;
+
                 path = c + path;
 
-                x += dx[j];
-                y += dy[j];
-            }
-
-            //delete unknown places
-            ///printf("Path length: %d\n", (int)path.length());
-            for (int i = 0; i < path.length(); ++i) {
-               /// printf("Map value: %d\n",(int)map->GetMap(x, y));
-                if(map->GetMap(x, y) == 200) {
-                   /// printf("Erasing path at %d\n", i);
-                    path.erase(i);
-                    break;
+                if (map->GetMap(x, y) == 200) {
+                    lastUnknownOccurence = iterator;
                 }
 
-                j = dir_map[x][y];
+                ++iterator;
                 x += dx[j];
                 y += dy[j];
             }
+
+            for (int i = 0; i < lastUnknownOccurence; ++i) {
+                path.pop_back();
+            }
+
+            printf("To be deleted: %d\n", lastUnknownOccurence);
 
             // garbage collection
             delete n0;
@@ -115,7 +112,7 @@ string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map)
         {
             xdx = x + dx[i]; ydy = y + dy[i];
 
-            if (!(xdx < 0 || xdx > xSize - 1 || ydy < 0 || ydy > ySize - 1 || map->GetMap(xdx, ydy ) > 200
+            if (!(xdx < 0 || xdx > xSize - 1 || ydy < 0 || ydy > ySize - 1 || map->GetMap(xdx, ydy) > 200
                 || closed_nodes_map[xdx][ydy] == 1))
             {
                 // generate a child Node

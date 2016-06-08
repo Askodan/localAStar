@@ -60,5 +60,5 @@ class Node
 std::string pathFind(int xStart, int yStart, int xFinish, int yFinish, myMap* map);
 void VisualizePath(std::string route, myMap *map, ros::Publisher pub);
 std::vector <geometry_msgs::Point> string2Vectors(std::string path, myMap *map);
-std::vector <geometry_msgs::Point> PathShortener(std::vector <geometry_msgs::Point> path, sensor_msgs::PointCloud* obstacles, float robotWidth);
+std::vector <geometry_msgs::Point> PathShortener(std::vector <geometry_msgs::Vector3> path, sensor_msgs::PointCloud* obstacles, float robotWidth);
 #endif // NODE_H

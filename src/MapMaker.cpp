@@ -183,6 +183,9 @@ void drawMap(myMap * map, ros::Publisher pub){
                 makeMarker(pub, i, p.x, p.y, (float)0.0, (float)0.5, (float)0.0, (float)0.5);
                 break;
             }
+            if(i==map->GetXSize()*(map->GetXSize()-1)){
+                makeMarker(pub, i, p.x, p.y, (float)1.0, (float)1.0, (float)1.0);
+            }
             //wzór na krawędzie
             /*if(i%map->sizeX<1||i%map->sizeX>map->sizeX-2||i<map->sizeX||i>(map->sizeX)*(map->sizeY-1)){
                 makeMarker(pub, i, p.x, p.y, (float)0.0, (float)0.0, (float)1.0, (float)1.0);
@@ -195,19 +198,24 @@ myMap* mask(myMap *map, int size){
     myMap *newOne = new myMap(*map);
     for(int i = 0;i<newOne->Length;i++){
 
-        if(map->GetMap(i)>=200){
+        if(map->GetMap(i)==201){
             newOne->SetMap(i, map->GetMap(i));
         }else{
-            int dupa = 0;
             bool allFree = true;
+            bool wall = false;
             for(int j = -size; j<size+1; j++){
                 for(int k = -size; k<size+1; k++){
                     int l = i+k+map->sizeX*j;
 
                     if((l>=0&&l<map->Length)&&i%map->sizeX>2)
                     {
-                        if(map->GetMap(i+k+map->sizeX*j)>=200){
+                        if(map->GetMap(l)>=200){
                             allFree = false;
+                        }
+                        if(map->GetMap(l)>200){
+                            wall=true;
+                            break;
+                            break;
                         }
                     }
                 }
@@ -215,7 +223,12 @@ myMap* mask(myMap *map, int size){
             if(allFree){
                 newOne->SetMap(i, 2);
             }else{
-                newOne->SetMap(i, 200);
+                if(wall){
+                    newOne->SetMap(i, 201);
+                }
+                else{
+                    newOne->SetMap(i, 200);
+                }
             }
         }
     }
